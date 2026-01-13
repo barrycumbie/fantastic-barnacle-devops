@@ -16,5 +16,8 @@
   "bugs": {
     "url": "https://github.com/barrycumbie/fantastic-barnacle-devops/issues"
   },
-  "homepage": "https://github.com/barrycumbie/fantastic-barnacle-devops#readme"
+  "homepage": "https://github.com/barrycumbie/fantastic-barnacle-devops#readme",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
 }
