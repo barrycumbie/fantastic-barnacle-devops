@@ -47,7 +47,7 @@
     
     function sendQuery() {
       const name = document.getElementById('queryName').value;
-      fetch(`/api/query?name=${encodeURIComponent(name)}`)
+      fetch(`/api/query?name=${encodeURIComponent(name)}`) //<255 characters. 
         .then(res => res.json())
         .then(data => {
           document.getElementById('queryResult').textContent = data.message;
