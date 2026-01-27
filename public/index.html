@@ -10,7 +10,7 @@
 <body>
   <h1>welcome to my devOps pages. </h1>
   <p>{{myVar}}</p>
-  <a href="json/">json</a>
+  <a href="/api/json">json</a>
 
   <div>
     <h3>Query Parameter</h3>
@@ -35,15 +35,16 @@
   </div>
 
   <script>
-    // fetch('/api/json')
-    //   .then(response => response.json())
-    //   .then(data => {
-    //     document.body.innerHTML += `<p>API says: ${data.myVar}</p>`;
-    //   })
-    //   .catch(err => {
-    //     document.body.innerHTML += `<p>Error fetching API</p>`;
-    //   });
+    fetch('/api/json')
+      .then(response => response.json())
+      .then(data => {
+        document.body.innerHTML += `<p>API says: ${data.myVar}</p>`;
+      })
+      .catch(err => {
+        document.body.innerHTML += `<p>Error fetching API</p>`;
+      });
 
+    
     function sendQuery() {
       const name = document.getElementById('queryName').value;
       fetch(`/api/query?name=${encodeURIComponent(name)}`)
