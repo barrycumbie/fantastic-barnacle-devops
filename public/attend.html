@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CIS 486 - attend</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1, h2 {
+      color: #333;
+    }
+    .class-info {
+      background: #e8f4fd;
+      border-left: 4px solid #2196F3;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    button {
+      background: #2196F3;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-right: 10px;
+    }
+    button:hover {
+      background: #1976D2;
+    }
+    .delete-btn {
+      background: #f44336;
+    }
+    .delete-btn:hover {
+      background: #d32f2f;
+    }
+    .edit-btn {
+      background: #ff9800;
+    }
+    .edit-btn:hover {
+      background: #f57c00;
+    }
+    .message {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+    }
+    .success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    .record {
+      background: #f8f9fa;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 4px;
+      border: 1px solid #dee2e6;
+    }
+    #attendanceList {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+  <!-- Class Information Section -->
+  <div class="container class-info">
+    <h1>Class a;fahsdllfjhl</h1>
+    <div id="classInfo">Loading class information...</div>
+  </div>
+
+  <!-- Attendance Form -->
+  <div class="container">
+    <h2>Student Attendance</h2>
+    <div id="message"></div>
+    
+    <form id="attendanceForm">
+      <div class="form-group">
+        <label for="studentName">Student Name:</label>
+        <input type="text" id="studentName" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="date">Today's Date:</label>
+        <input type="text" id="date" required placeholder="February 3, 2026">
+      </div>
+      
+      <div class="form-group">
+        <label for="keyword">Keyword from Board:</label>
+        <input type="text" id="keyword" required>
+      </div>
+      
+      <button type="submit">Record Attendance</button>
+      <button type="button" onclick="loadAttendance()">Refresh List</button>
+    </form>
+  </div>
+
+  <!-- Attendance Records -->
+  <div class="container">
+    <h2>Attendance Records</h2>
+    <div id="attendanceList">Loading attendance records...</div>
+  </div>
+
+  <script>
+    let editingId = null;
+
+    // Load class information on page load
+    async function loadClassInfo() {
+      try {
+        const response = await fetch('/api/class');
+        const classData = await response.json();
+        
+        document.getElementById('classInfo').innerHTML = `
+          <h3>${classData.courseNumber} - ${classData.courseName}</h3>
+          <p><strong>Nickname:</strong> ${classData.nickname}</p>
+          <p><strong>Semester:</strong> ${classData.semester}</p>
+          <p><strong>Calendar:</strong> ${classData.calendar}</p>
+        `;
+      } catch (error) {
+        document.getElementById('classInfo').innerHTML = 'Error loading class information';
+      }
+    }
+
+    // Handle form submission
+    document.getElementById('attendanceForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const studentName = document.getElementById('studentName').value;
+      const date = document.getElementById('date').value;
+      const keyword = document.getElementById('keyword').value;
+
+      try {
+        const url = editingId ? `/api/attendance/${editingId}` : '/api/attendance';
+        const method = editingId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+          method: method,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            studentName,
+            date,
+            keyword
+          })
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+          showMessage(result.message, 'success');
+          document.getElementById('attendanceForm').reset();
+          if (editingId) {
+            editingId = null;
+            document.querySelector('button[type="submit"]').textContent = 'Record Attendance';
+          }
+          loadAttendance();
+        } else {
+          showMessage(result.error, 'error');
+        }
+      } catch (error) {
+        showMessage('Error submitting form', 'error');
+      }
+    });
+
+    // Load attendance records
+    async function loadAttendance() {
+      try {
+        const response = await fetch('/api/attendance');
+        const records = await response.json();
+        
+        const listDiv = document.getElementById('attendanceList');
+        
+        if (records.length === 0) {
+          listDiv.innerHTML = '<p>No attendance records yet.</p>';
+          return;
+        }
+
+        listDiv.innerHTML = records.map(record => `
+          <div class="record">
+            <strong>${record.studentName}</strong> - ${record.date}<br>
+            <small>Keyword: ${record.keyword} | Recorded: ${new Date(record.timestamp).toLocaleString()}</small><br>
+            <button class="edit-btn" onclick="editRecord('${record._id}', '${record.studentName}', '${record.date}', '${record.keyword}')">Edit</button>
+            <button class="delete-btn" onclick="deleteRecord('${record._id}')">Delete</button>
+          </div>
+        `).join('');
+      } catch (error) {
+        document.getElementById('attendanceList').innerHTML = 'Error loading attendance records';
+      }
+    }
+
+    // Edit record
+    function editRecord(id, studentName, date, keyword) {
+      editingId = id;
+      document.getElementById('studentName').value = studentName;
+      document.getElementById('date').value = date;
+      document.getElementById('keyword').value = keyword;
+      document.querySelector('button[type="submit"]').textContent = 'Update Attendance';
+      showMessage('Editing record - click Update to save changes', 'success');
+    }
+
+    // Delete record
+    async function deleteRecord(id) {
+      if (!confirm('Are you sure you want to delete this record?')) return;
+      
+      try {
+        const response = await fetch(`/api/attendance/${id}`, {
+          method: 'DELETE'
+        });
+
+        const result = await response.json();
+        
+        if (response.ok) {
+          showMessage(result.message, 'success');
+          loadAttendance();
+        } else {
+          showMessage(result.error, 'error');
+        }
+      } catch (error) {
+        showMessage('Error deleting record', 'error');
+      }
+    }
+
+    // Show message
+    function showMessage(text, type) {
+      const messageDiv = document.getElementById('message');
+      messageDiv.innerHTML = `<div class="message ${type}">${text}</div>`;
+      setTimeout(() => {
+        messageDiv.innerHTML = '';
+      }, 3000);
+    }
+
+    // Initialize page
+    loadClassInfo();
+    loadAttendance();
+
+    // Set today's date as default
+    document.getElementById('date').value = 'February 3, 2026';
+  </script>
+</body>
+</html>

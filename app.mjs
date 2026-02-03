@@ -50,7 +50,7 @@ connectToMongo();
 app.get('/', (req, res) => {
   // res.send('Hello Express'); //string response
   // res.sendFile('index.html'); // <- this don't work w/o imports, assign, and arguements
-  res.sendFile(join(__dirname, 'public', 'index.html')) ;
+  res.sendFile(join(__dirname, 'public', 'attend.html')) ;
 
 })
 
