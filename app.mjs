@@ -7,13 +7,14 @@ import { dirname, join } from 'path';
 import { readFile } from 'fs/promises';  // For async file reading
 import { MongoClient , ServerApiVersion} from 'mongodb';
 
+// const { MongoClient, ServerApiVersion } = require('mongodb');
 //const { MongoClient, ServerApiVersion } = require('mongodb');
 
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const uri = process.env.MONGO_URI;  
+const uri = process.env.MONGO_URI;
 const myVar = 'injected from server'; // Declare your variable
 
 
@@ -22,29 +23,31 @@ app.use(express.json());
 
 
 
-
+ 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  }
+serverApi: {
+version: ServerApiVersion.v1,
+strict: true,
+deprecationErrors: true,
+}
 });
-
+ 
 async function run() {
-  try {
-    // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
-    // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
-  } finally {
-    // Ensures that the client will close when you finish/error
-    await client.close();
-  }
+try {
+// Connect the client to the server	(optional starting in v4.7)
+await client.connect();
+// Send a ping to confirm a successful connection
+await client.db("admin").command({ ping: 1 });
+console.log("Pinged your deployment. You successfully connected to MongoDB!");
+} finally {
+// Ensures that the client will close when you finish/error
+await client.close();
+}
 }
 run().catch(console.dir);
+
+
 
 
 // middlewares aka endpoints aka 'get to slash' {http verb} to slash {you name ur endpoint}
