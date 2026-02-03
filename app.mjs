@@ -5,7 +5,7 @@ import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { readFile } from 'fs/promises';  // For async file reading
-import { MongoClient , ServerApiVersion} from 'mongodb';
+import { MongoClient, ServerApiVersion, ObjectId } from 'mongodb';
 
 //const { MongoClient, ServerApiVersion } = require('mongodb');
 
@@ -32,19 +32,18 @@ const client = new MongoClient(uri, {
   }
 });
 
-async function run() {
+async function connectToMongo() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
-  } finally {
-    // Ensures that the client will close when you finish/error
-    await client.close();
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
   }
 }
-run().catch(console.dir);
+connectToMongo();
 
 
 // middlewares aka endpoints aka 'get to slash' {http verb} to slash {you name ur endpoint}
@@ -68,27 +67,168 @@ app.get('/inject', (req, res) => {
     });
 })
 
-app.get('/api/json', (req, res) =>{
-  const myVar = 'Hello from server!';
-  res.json({ myVar });
-})
+// API Health/Endpoints Documentation
+app.get('/api/health', (req, res) => {
+  const endpoints = [
+    {
+      method: 'GET',
+      path: '/',
+      description: 'Serve the main HTML page'
+    },
+    {
+      method: 'GET',
+      path: '/inject',
+      description: 'Serve HTML with server-side variable injection'
+    },
+    {
+      method: 'GET',
+      path: '/api/health',
+      description: 'Show all available API endpoints'
+    },
+    {
+      method: 'GET',
+      path: '/api/class',
+      description: 'Get class information (course details)'
+    },
+    {
+      method: 'POST',
+      path: '/api/attendance',
+      description: 'CREATE - Add new student attendance record',
+      bodyExample: {
+        studentName: 'John Doe',
+        date: 'February 3, 2026',
+        keyword: 'devops'
+      }
+    },
+    {
+      method: 'GET',
+      path: '/api/attendance',
+      description: 'READ - Get all attendance records'
+    },
+    {
+      method: 'PUT',
+      path: '/api/attendance/:id',
+      description: 'UPDATE - Update existing attendance record',
+      bodyExample: {
+        studentName: 'Jane Doe',
+        date: 'February 3, 2026',
+        keyword: 'mongodb'
+      }
+    },
+    {
+      method: 'DELETE',
+      path: '/api/attendance/:id',
+      description: 'DELETE - Remove attendance record'
+    }
+  ];
 
-app.get('/api/query', (req, res) => {
-  console.log("client request with query param:", req.query.name); 
-  res.json({"message": req.query.name});
+  res.json({
+    status: 'healthy',
+    server: 'CIS 486 DevOps Server',
+    timestamp: new Date().toISOString(),
+    endpoints: endpoints
+  });
 });
 
-app.get('/api/url/:iaddasfsd', (req, res) => {
-
-  console.log("client request with URL param:", req.params.iaddasfsd); 
-  res.json({"message": `Hi, ${req.params.iaddasfsd}. How are you?`});
+// Class Information API
+app.get('/api/class', (req, res) => {
+  const classInfo = {
+    courseNumber: 'CIS 486',
+    courseName: 'Projects in IS',
+    nickname: 'Full Stack DevOps',
+    semester: 'Spring 2026',
+    calendar: 'Class calendar coming soon!'
+  };
+  res.json(classInfo);
 });
 
+// CRUD Operations for Attendance
 
-app.post('/api/body', (req, res) => {
-  // console.log("the body:", req.body); 
-  console.log("client request with body:", req.body.name); 
-  res.json({"message": req.body.name});
+// CREATE - Add student attendance
+app.post('/api/attendance', async (req, res) => {
+  try {
+    const { studentName, date, keyword } = req.body;
+    
+    if (!studentName || !date || !keyword) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const db = client.db('cis486');
+    const collection = db.collection('attendance');
+    
+    const attendanceRecord = {
+      studentName,
+      date,
+      keyword,
+      timestamp: new Date()
+    };
+    
+    const result = await collection.insertOne(attendanceRecord);
+    res.json({ message: 'Attendance recorded!', id: result.insertedId });
+  } catch (error) {
+    console.error('Error creating attendance:', error);
+    res.status(500).json({ error: 'Failed to record attendance' });
+  }
+});
+
+// READ - Get all attendance records
+app.get('/api/attendance', async (req, res) => {
+  try {
+    const db = client.db('cis486');
+    const collection = db.collection('attendance');
+    
+    const records = await collection.find({}).toArray();
+    res.json(records);
+  } catch (error) {
+    console.error('Error reading attendance:', error);
+    res.status(500).json({ error: 'Failed to get attendance records' });
+  }
+});
+
+// UPDATE - Update attendance record
+app.put('/api/attendance/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { studentName, date, keyword } = req.body;
+    
+    const db = client.db('cis486');
+    const collection = db.collection('attendance');
+    
+    const result = await collection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { studentName, date, keyword, updatedAt: new Date() } }
+    );
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Record not found' });
+    }
+    
+    res.json({ message: 'Attendance updated!' });
+  } catch (error) {
+    console.error('Error updating attendance:', error);
+    res.status(500).json({ error: 'Failed to update attendance' });
+  }
+});
+
+// DELETE - Delete attendance record
+app.delete('/api/attendance/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const db = client.db('cis486');
+    const collection = db.collection('attendance');
+    
+    const result = await collection.deleteOne({ _id: new ObjectId(id) });
+    
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'Record not found' });
+    }
+    
+    res.json({ message: 'Attendance deleted!' });
+  } catch (error) {
+    console.error('Error deleting attendance:', error);
+    res.status(500).json({ error: 'Failed to delete attendance' });
+  }
 });
 
 
