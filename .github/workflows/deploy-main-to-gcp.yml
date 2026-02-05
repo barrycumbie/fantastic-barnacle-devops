@@ -1,0 +1,46 @@
+name: deploy-main-to-gcp.yml
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Prepare SSH
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          # safer than StrictHostKeyChecking=no
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy over SSH
+        shell: bash
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          APP_DIR:  ${{ vars.APP_DIR }}
+          PM2_NAME: ${{ vars.PM2_NAME }}
+        run: |
+          ssh -i ~/.ssh/id_rsa -tt "$SSH_USER@$SSH_HOST" <<EOF
+            set -e
+
+            cd "$APP_DIR"
+
+            git pull
+            npm ci
+
+            pm2 delete "$PM2_NAME" || true
+            pm2 start -f app.mjs --name "$PM2_NAME"
+
+            pm2 save
+          EOF
