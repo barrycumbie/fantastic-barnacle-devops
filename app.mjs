@@ -1,6 +1,6 @@
 //app.mjs
 //we are in ES6, use this. 
-import 'dotenv/config'; 
+import 'dotenv/config';
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -19,31 +19,28 @@ const myVar = 'injected from server'; // Declare your variable
 
 
 app.use(express.static(join(__dirname, 'public')));
-app.use(express.json()); 
+app.use(express.json());
 
-
-
- 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
-serverApi: {
-version: ServerApiVersion.v1,
-strict: true,
-deprecationErrors: true,
-}
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  }
 });
- 
+
 async function run() {
-try {
-// Connect the client to the server	(optional starting in v4.7)
-await client.connect();
-// Send a ping to confirm a successful connection
-await client.db("admin").command({ ping: 1 });
-console.log("Pinged your deployment. You successfully connected to MongoDB!");
-} finally {
-// Ensures that the client will close when you finish/error
-await client.close();
-}
+  try {
+    // Connect the client to the server	(optional starting in v4.7)
+    await client.connect();
+    // Send a ping to confirm a successful connection
+    await client.db("admin").command({ ping: 1 });
+    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+  } finally {
+    // Ensures that the client will close when you finish/error
+    await client.close();
+  }
 }
 run();
 
@@ -54,7 +51,7 @@ run();
 app.get('/', (req, res) => {
   // res.send('Hello Express'); //string response
   // res.sendFile('index.html'); // <- this don't work w/o imports, assign, and arguements
-  res.sendFile(join(__dirname, 'public', 'attend.html')) ;
+  res.sendFile(join(__dirname, 'public', 'attend.html'));
 
 })
 
@@ -152,21 +149,21 @@ app.get('/api/class', (req, res) => {
 app.post('/api/attendance', async (req, res) => {
   try {
     const { studentName, date, keyword } = req.body;
-    
+
     if (!studentName || !date || !keyword) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
     const db = client.db('cis486');
     const collection = db.collection('attendance');
-    
+
     const attendanceRecord = {
       studentName,
       date,
       keyword,
       timestamp: new Date()
     };
-    
+
     const result = await collection.insertOne(attendanceRecord);
     res.json({ message: 'Attendance recorded!', id: result.insertedId });
   } catch (error) {
@@ -180,7 +177,7 @@ app.get('/api/attendance', async (req, res) => {
   try {
     const db = client.db('cis486');
     const collection = db.collection('attendance');
-    
+
     const records = await collection.find({}).toArray();
     res.json(records);
   } catch (error) {
@@ -194,19 +191,19 @@ app.put('/api/attendance/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { studentName, date, keyword } = req.body;
-    
+
     const db = client.db('cis486');
     const collection = db.collection('attendance');
-    
+
     const result = await collection.updateOne(
       { _id: new ObjectId(id) },
       { $set: { studentName, date, keyword, updatedAt: new Date() } }
     );
-    
+
     if (result.matchedCount === 0) {
       return res.status(404).json({ error: 'Record not found' });
     }
-    
+
     res.json({ message: 'Attendance updated!' });
   } catch (error) {
     console.error('Error updating attendance:', error);
@@ -218,16 +215,16 @@ app.put('/api/attendance/:id', async (req, res) => {
 app.delete('/api/attendance/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const db = client.db('cis486');
     const collection = db.collection('attendance');
-    
+
     const result = await collection.deleteOne({ _id: new ObjectId(id) });
-    
+
     if (result.deletedCount === 0) {
       return res.status(404).json({ error: 'Record not found' });
     }
-    
+
     res.json({ message: 'Attendance deleted!' });
   } catch (error) {
     console.error('Error deleting attendance:', error);
