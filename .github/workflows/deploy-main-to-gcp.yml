@@ -10,9 +10,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Prepare SSH
         shell: bash
         env:
@@ -33,84 +30,43 @@ jobs:
           printf '%s' "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          # Optional sanity check (won't print the key)
-          ssh-keygen -lf ~/.ssh/id_rsa
-
           # OLD:
           # ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
           # chmod 644 ~/.ssh/known_hosts
 
-          # NEW (timeout + capture stderr so failure is explainable):
+          # NEW (timeout + show stderr if needed):
           ssh-keyscan -T 5 -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/tmp/keyscan.err || true
           cat /tmp/keyscan.err || true
           chmod 644 ~/.ssh/known_hosts
 
-      - name: SSH Smoke Test
+      - name: Deploy (no heredoc)
         shell: bash
         env:
           SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
-        run: |
-          set -euo pipefail
-
-          ssh -i ~/.ssh/id_rsa \
-            -o BatchMode=yes \
-            -o ConnectTimeout=10 \
-            "$SSH_USER@$SSH_HOST" "whoami && hostname && pwd"
-
-      - name: Deploy app (git pull, npm ci, pm2 restart)
-        shell: bash
-        env:
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-
-          # If you want to hardcode for now:
           APP_DIR: /home/barrycumbie/app
           PM2_NAME: app
 
           # OLD (yours):
-          # APP_DIR:  app #${{ vars.APP_DIR }}
-          # PM2_NAME: app # ${{ vars.PM2_NAME }}
+          # APP_DIR: app #${{ vars.APP_DIR }}
+          # PM2_NAME: app #${{ vars.PM2_NAME }}
         run: |
           set -euo pipefail
 
-          # OLD (yours):
+          # OLD (yours - heredoc):
           # ssh -i ~/.ssh/id_rsa -tt "$SSH_USER@$SSH_HOST" <<EOF
           #   set -e
-          #
           #   cd "$APP_DIR"
-          #
           #   git pull
           #   npm ci
-          #
           #   pm2 delete "$PM2_NAME" || true
           #   pm2 start -f app.mjs --name "$PM2_NAME"
-          #
           #   pm2 save
           # EOF
 
-          # NEW (single SSH + safe variable injection):
+          # NEW (no heredoc; runs a single remote bash command):
           ssh -i ~/.ssh/id_rsa \
             -o BatchMode=yes \
             -o ConnectTimeout=15 \
-            "$SSH_USER@$SSH_HOST" "APP_DIR='$APP_DIR' PM2_NAME='$PM2_NAME' bash -s" <<'REMOTE'
-              set -euo pipefail
-
-              echo "REMOTE USER: $(whoami)"
-              echo "REMOTE PWD:  $(pwd)"
-              echo "APP_DIR=$APP_DIR"
-              echo "PM2_NAME=$PM2_NAME"
-
-              # Helpful debug if path ever breaks:
-              ls -la "$(dirname "$APP_DIR")" || true
-              ls -la "$APP_DIR" || true
-
-              cd "$APP_DIR"
-
-              git pull
-              npm ci
-
-              pm2 delete "$PM2_NAME" || true
-              pm2 start -f app.mjs --name "$PM2_NAME"
-              pm2 save
-REMOTE
+            "$SSH_USER@$SSH_HOST" \
+            "bash -lc 'set -euo pipefail; cd \"$APP_DIR\"; git pull; npm ci; pm2 delete \"$PM2_NAME\" || true; pm2 start -f app.mjs --name \"$PM2_NAME\"; pm2 save'"
