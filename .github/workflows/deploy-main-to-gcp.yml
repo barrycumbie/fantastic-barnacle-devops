@@ -31,10 +31,10 @@ jobs:
       - name: Deploy over SSH
         shell: bash
         env:
-          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_USER: barrycumbie #${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
-          APP_DIR:  app
-          PM2_NAME: ${{ vars.PM2_NAME }}
+          APP_DIR:  app #${{ vars.APP_DIR }}
+          PM2_NAME: app # ${{ vars.PM2_NAME }}
         run: |
           ssh -i ~/.ssh/id_rsa -tt "$SSH_USER@$SSH_HOST" <<EOF
             set -e
