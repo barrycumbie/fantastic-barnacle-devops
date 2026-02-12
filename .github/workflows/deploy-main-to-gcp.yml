@@ -19,6 +19,11 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
+          echo "HOST=$HOST"
+          getent hosts "$HOST" || true
+          nslookup "$HOST" || true
+          nc -vz "$HOST" 22 || true
+
           # safer than StrictHostKeyChecking=no
           ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
