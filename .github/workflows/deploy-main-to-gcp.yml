@@ -1,4 +1,4 @@
-name: deploy-main-to-gcp.yml
+name: deploy-main-to-gcp
 
 on:
   push:
@@ -10,42 +10,121 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Prepare SSH
         shell: bash
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
+          set -euo pipefail
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          # OLD:
+          # echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          # chmod 600 ~/.ssh/id_rsa
+
+          # NEW (safer: preserves key formatting/newlines):
+          printf '%s' "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          echo "HOST=$HOST"
-          getent hosts "$HOST" || true
-          nslookup "$HOST" || true
-          nc -vz "$HOST" 22 || true
+          # Optional sanity check that the key parses:
+          ssh-keygen -lf ~/.ssh/id_rsa
 
-          # safer than StrictHostKeyChecking=no
-          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+          # Debug connectivity (won't fail the job):
+          echo "HOST=$SSH_HOST"
+          getent hosts "$SSH_HOST" || true
+          nslookup "$SSH_HOST" || true
+          nc -vz "$SSH_HOST" 22 || true
+
+          # OLD:
+          # ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+          # chmod 644 ~/.ssh/known_hosts
+
+          # NEW (timeout + capture stderr so you can see why it fails):
+          ssh-keyscan -T 5 -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/tmp/keyscan.err || true
+          cat /tmp/keyscan.err || true
           chmod 644 ~/.ssh/known_hosts
 
-      - name: Deploy over SSH
+      - name: SSH Smoke Test
         shell: bash
         env:
-          SSH_USER: barrycumbie #${{ secrets.SSH_USER }}
+          SSH_USER: ${{ secrets.SSH_USER }}
           SSH_HOST: ${{ secrets.SSH_HOST }}
-          APP_DIR:  app #${{ vars.APP_DIR }}
-          PM2_NAME: app # ${{ vars.PM2_NAME }}
         run: |
-          ssh -i ~/.ssh/id_rsa -tt "$SSH_USER@$SSH_HOST" <<EOF
-            set -e
+          set -euo pipefail
 
-            cd "$APP_DIR"
+          ssh -i ~/.ssh/id_rsa \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            "$SSH_USER@$SSH_HOST" "whoami && hostname && pwd"
 
-            git pull
-            npm ci
+      - name: Deploy (git pull, npm ci, pm2 restart)
+        shell: bash
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
 
-            pm2 delete "$PM2_NAME" || true
-            pm2 start -f app.mjs --name "$PM2_NAME"
+          # IMPORTANT: make APP_DIR absolute (recommended)
+          # Example: /home/barrycumbie/app   OR   /home/barrycumbie/fantastic-barnacle-devops
+          APP_DIR: ${{ vars.APP_DIR }}     # set this in GitHub "Variables"
+          PM2_NAME: ${{ vars.PM2_NAME }}   # e.g. app
+        run: |
+          set -euo pipefail
 
-            pm2 save
-          EOF
+          # OLD:
+          # ssh -i ~/.ssh/id_rsa -tt "$SSH_USER@$SSH_HOST" <<EOF
+          #   set -e
+          #   cd "$APP_DIR"
+          #   git pull
+          #   npm ci
+          #   pm2 delete "$PM2_NAME" || true
+          #   pm2 start -f app.mjs --name "$PM2_NAME"
+          #   pm2 save
+          # EOF
+
+          # NEW (more predictable than heredoc expansion quirks):
+          ssh -i ~/.ssh/id_rsa \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            "$SSH_USER@$SSH_HOST" "bash -s" <<'REMOTE'
+              set -euo pipefail
+
+              echo "REMOTE USER: $(whoami)"
+              echo "REMOTE PWD:  $(pwd)"
+
+              # These are injected by the runner before this script runs:
+              # (We will export them below using the runner values.)
+REMOTE
+          # We re-run ssh with exported vars so the remote script can use them safely:
+          ssh -i ~/.ssh/id_rsa \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            "$SSH_USER@$SSH_HOST" \
+            "APP_DIR='${APP_DIR}' PM2_NAME='${PM2_NAME}' bash -s" <<'REMOTE'
+              set -euo pipefail
+
+              echo "APP_DIR=$APP_DIR"
+              echo "PM2_NAME=$PM2_NAME"
+
+              # Helpful debug if paths are wrong:
+              ls -la "$(dirname "$APP_DIR")" || true
+              ls -la "$APP_DIR" || true
+
+              cd "$APP_DIR"
+
+              # If Git ever complains about "dubious ownership", keep this (optional):
+              # git config --global --add safe.directory "$APP_DIR"
+
+              git pull
+              npm ci
+
+              pm2 delete "$PM2_NAME" || true
+              pm2 start -f app.mjs --name "$PM2_NAME"
+              pm2 save
+REMOTE
