@@ -1,4 +1,4 @@
-name: deploy-main-to-gcp
+name: deploy-whatever. 
 
 on:
   push:
@@ -7,66 +7,25 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # Run this job on the latest Ubuntu version
 
     steps:
-      - name: Prepare SSH
-        shell: bash
+      - name: Start whatever
         env:
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }} # Reference the private key stored in GitHub Secrets
         run: |
-          set -euo pipefail
+          echo "$PRIVATE_KEY" > private_key.pem # Write the private key to a file
+          chmod 600 private_key.pem # Set the appropriate permissions for the key file
 
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
+          # Establish an SSH connection and execute commands on the remote server
+          ssh -o StrictHostKeyChecking=no -i private_key.pem -tt bcumbie@34.56.120.230 <<EOF  
+            # Here Document, allows for multiple commands while connectd to server 
+            cd app #go to repo
+            npm ci
+            pm2 delete app #in case the website is currently running
+            git pull #update repo
+            pm2 start -f app.mjs #start the updated app
+            exit  
+          EOF
 
-          # OLD:
-          # echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          # chmod 600 ~/.ssh/id_rsa
-
-          # NEW:
-          printf '%s' "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-
-          # OLD:
-          # ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
-          # chmod 644 ~/.ssh/known_hosts
-
-          # NEW (timeout + show stderr if needed):
-          ssh-keyscan -T 5 -H "$SSH_HOST" >> ~/.ssh/known_hosts 2>/tmp/keyscan.err || true
-          cat /tmp/keyscan.err || true
-          chmod 644 ~/.ssh/known_hosts
-
-      - name: Deploy (no heredoc)
-        shell: bash
-        env:
-          SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          APP_DIR: /home/barrycumbie/app
-          PM2_NAME: app
-
-          # OLD (yours):
-          # APP_DIR: app #${{ vars.APP_DIR }}
-          # PM2_NAME: app #${{ vars.PM2_NAME }}
-        run: |
-          set -euo pipefail
-
-          # OLD (yours - heredoc):
-          # ssh -i ~/.ssh/id_rsa -tt "$SSH_USER@$SSH_HOST" <<EOF
-          #   set -e
-          #   cd "$APP_DIR"
-          #   git pull
-          #   npm ci
-          #   pm2 delete "$PM2_NAME" || true
-          #   pm2 start -f app.mjs --name "$PM2_NAME"
-          #   pm2 save
-          # EOF
-
-          # NEW (no heredoc; runs a single remote bash command):
-          ssh -i ~/.ssh/id_rsa \
-            -o BatchMode=yes \
-            -o ConnectTimeout=15 \
-            "$SSH_USER@$SSH_HOST" \
-            "bash -lc 'set -euo pipefail; cd \"$APP_DIR\"; git pull; npm ci; pm2 delete \"$PM2_NAME\" || true; pm2 start -f app.mjs --name \"$PM2_NAME\"; pm2 save'"
+          rm -f private_key.pem # Remove the private key file after use for security
