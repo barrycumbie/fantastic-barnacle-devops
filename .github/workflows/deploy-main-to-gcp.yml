@@ -1,4 +1,4 @@
-name: deploy-whatever. 
+ame: deploy-main-to-gcp.yml
 
 on:
   push:
@@ -7,25 +7,40 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest # Run this job on the latest Ubuntu version
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Start whatever
-        env:
-          PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }} # Reference the private key stored in GitHub Secrets
+      - name: Prepare SSH
+        shell: bash
         run: |
-          echo "$PRIVATE_KEY" > private_key.pem # Write the private key to a file
-          chmod 600 private_key.pem # Set the appropriate permissions for the key file
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
 
-          # Establish an SSH connection and execute commands on the remote server
-          ssh -o StrictHostKeyChecking=no -i private_key.pem -tt bcumbie@34.56.120.230 <<EOF  
-            # Here Document, allows for multiple commands while connectd to server 
-            cd app #go to repo
-            npm ci
-            pm2 delete app #in case the website is currently running
-            git pull #update repo
-            pm2 start -f app.mjs #start the updated app
-            exit  
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+          # safer than StrictHostKeyChecking=no
+          ssh-keyscan -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy over SSH
+        shell: bash
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          APP_DIR:  app # ${{ vars.APP_DIR }}
+          PM2_NAME: app # ${{ vars.PM2_NAME }}
+        run: |
+          ssh -i ~/.ssh/id_rsa -T "$SSH_USER@$SSH_HOST" <<EOF
+            set -e
+
+            cd "$APP_DIR"
+
+            git pull
+            sudo npm ci
+
+            pm2 delete "$PM2_NAME" || true
+            pm2 start -f app.mjs --name "$PM2_NAME"
+
+            pm2 save
           EOF
-
-          rm -f private_key.pem # Remove the private key file after use for security
