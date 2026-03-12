@@ -1,9 +1,12 @@
-# fantastic-barnacle-devops
-Spring 2026 CIS 486. 
+## Student Manager – Dev Lab Québec
 
----
+Author: Ton Nom
 
-## submissions. 
+Mini full stack application demonstrating a complete data round trip with CRUD functionality.
 
-- Dr. Cumbie's MINI-APP :octocat: Repository: https://github.com/barrycumbie/literate-fortnight-yar
+Links:
+Mini App  
+https://dev-hum.onrender.com/
 
+Repository  
+https://github.com/sweetiesyvi/hum
